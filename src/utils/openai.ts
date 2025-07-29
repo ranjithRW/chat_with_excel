@@ -36,32 +36,33 @@ ${processedData}
 User Question: ${question}
 
 Instructions:
-1. ALWAYS analyze the question to determine if filtering, sorting, or aggregation is needed
-2. For "top N" queries: sort data and return exact top results with rankings
-3. For filtering queries: apply filters and show only matching data
-4. For comparison queries: group and compare data segments
-5. For trend analysis: identify patterns and changes over time
-6. ALWAYS provide specific numbers, percentages, and data points
-7. For visualization requests or when data would benefit from charts, include chart specification
-8. Chart types to consider:
-   - Bar charts: for comparisons, rankings, categories
-   - Line charts: for trends over time, continuous data
-   - Pie charts: for proportions, percentages, parts of whole
-   - Area charts: for cumulative data, stacked comparisons
-9. Use processed/filtered data for charts, ensure data is properly formatted
-10. Include meaningful titles and labels for charts
+1. ALWAYS analyze the question to determine if filtering, sorting, or aggregation is needed.
+2. Provide a clear, human-readable text summary of your findings. Include specific numbers, percentages, and data points.
+3. If the user asks for a visualization, or if the data analysis would strongly benefit from a chart, you MUST include a chart specification.
+4. Chart types to consider:
+   - Bar charts: for comparisons, rankings, categories (e.g., "Top 5 products by sales").
+   - Line charts: for trends over time, continuous data.
+   - Pie charts: for proportions of a whole (e.g., "Sales distribution by region").
+   - Area charts: for cumulative data or stacked comparisons over time.
+5. For Pokemon datasets, recognize common attributes: Attack, Defense, HP, Speed, etc., and create engaging chart titles like "Top 5 Pokemon by Attack Power".
+6. CRITICAL: Your response format MUST be as follows:
+   - First, provide the complete text summary.
+   - After the text, on a new line, add the chart specification block.
 
-If a chart is needed, format your response as:
-TEXT_RESPONSE
+Example Response Format:
+The top 5 Pokemon by Attack points are:
+1. Deoxys with 345 Attack points
+2. Mewtwo with 300 Attack points
+3. Rampardos with 295 Attack points
+4. Archeops with 292 Attack points
+5. Slaking with 290 Attack points
 
 CHART_SPEC: {
-  "type": "bar|line|pie|area",
-  "title": "Chart Title",
-  "data": [array of objects with the data to chart],
-  "xKey": "x-axis field name",
-  "yKey": "y-axis field name",
-  "dataKey": "value field for pie charts",
-  "nameKey": "name field for pie charts"
+  "type": "bar",
+  "title": "Top 5 Pokemon by Attack Points",
+  "data": [{"name":"Deoxys","value":345},{"name":"Mewtwo","value":300},{"name":"Rampardos","value":295},{"name":"Archeops","value":292},{"name":"Slaking","value":290}],
+  "xKey": "name",
+  "yKey": "value"
 }
 
 Answer the question now:`;
@@ -69,7 +70,7 @@ Answer the question now:`;
       const completion = await this.openai.chat.completions.create({
         model: "gpt-4",
         messages: [{ role: "user", content: prompt }],
-        temperature: 0.3,
+        temperature: 0.2,
         max_tokens: 1500
       });
 
@@ -258,19 +259,20 @@ Answer the question now:`;
       );
       
       if (numericColumns.length > 0) {
-        // Try to find the most relevant numeric column based on the question
         const relevantColumn = this.findRelevantColumn(question, numericColumns);
         
         if (relevantColumn) {
           const sorted = [...rows]
             .filter(row => row[relevantColumn] != null && row[relevantColumn] !== '')
+            .filter(row => !isNaN(parseFloat(row[relevantColumn])) && isFinite(parseFloat(row[relevantColumn])))
             .sort((a, b) => parseFloat(b[relevantColumn]) - parseFloat(a[relevantColumn]))
             .slice(0, topN);
           
           result += `Sheet: ${sheetName}\nTop ${topN} by ${relevantColumn}:\n`;
           sorted.forEach((row, index) => {
             const identifier = this.getRowIdentifier(row, headers);
-            result += `${index + 1}. ${identifier}: ${row[relevantColumn]}\n`;
+            const value = parseFloat(row[relevantColumn]);
+            result += `${index + 1}. ${identifier}: ${value.toLocaleString()}\n`;
           });
           result += '\n';
         }
@@ -315,15 +317,12 @@ Answer the question now:`;
   
   private processFilterQuery(question: string, data: ExcelData): string {
     let result = 'Filtered Data Analysis:\n\n';
-    const lowerQuestion = question.toLowerCase();
     
     Object.entries(data.sheets).forEach(([sheetName, rows]) => {
       if (rows.length === 0) return;
       
       let filteredRows = [...rows];
       const headers = Object.keys(rows[0]);
-      
-      // Apply basic text-based filtering
       const filterTerms = this.extractFilterTerms(question);
       
       if (filterTerms.length > 0) {
@@ -353,16 +352,13 @@ Answer the question now:`;
   }
   
   private extractFilterTerms(question: string): string[] {
-    const lowerQuestion = question.toLowerCase();
     const terms: string[] = [];
     
-    // Extract quoted terms
     const quotedMatches = question.match(/"([^"]+)"/g);
     if (quotedMatches) {
       terms.push(...quotedMatches.map(match => match.replace(/"/g, '')));
     }
     
-    // Extract terms after common filter words
     const filterPatterns = [
       /where\s+(\w+)/g,
       /only\s+(\w+)/g,
@@ -371,7 +367,7 @@ Answer the question now:`;
     ];
     
     filterPatterns.forEach(pattern => {
-      const matches = lowerQuestion.match(pattern);
+      const matches = question.toLowerCase().match(pattern);
       if (matches) {
         terms.push(...matches.map(match => match.split(/\s+/).pop() || ''));
       }
@@ -423,8 +419,17 @@ Answer the question now:`;
   private findRelevantColumn(question: string, columns: string[]): string | null {
     const lowerQuestion = question.toLowerCase();
     
-    // Common keywords to column mappings
     const keywords = {
+      'attack': ['attack', 'atk', 'att', 'physical attack', 'physical_attack'],
+      'defense': ['defense', 'def', 'defence', 'physical defense', 'physical_defense'],
+      'hp': ['hp', 'health', 'hitpoints', 'hit points', 'health points'],
+      'speed': ['speed', 'spd', 'velocity', 'agility'],
+      'special attack': ['special attack', 'sp attack', 'sp_attack', 'spatk', 'special_attack'],
+      'special defense': ['special defense', 'sp defense', 'sp_defense', 'spdef', 'special_defense'],
+      'type': ['type', 'pokemon_type', 'element', 'category'],
+      'name': ['name', 'pokemon', 'pokemon_name', 'title'],
+      'generation': ['generation', 'gen', 'series'],
+      'legendary': ['legendary', 'legend', 'rare'],
       'sales': ['sales', 'revenue', 'amount', 'total', 'value', 'sold'],
       'price': ['price', 'cost', 'amount', 'value', 'rate'],
       'quantity': ['quantity', 'qty', 'count', 'number', 'units'],
@@ -435,7 +440,6 @@ Answer the question now:`;
       'weight': ['weight', 'mass', 'kg', 'pounds'],
       'height': ['height', 'length', 'tall', 'cm'],
       'date': ['date', 'time', 'when', 'day', 'month', 'year'],
-      'name': ['name', 'title', 'label'],
       'category': ['category', 'type', 'class', 'group'],
       'region': ['region', 'area', 'location', 'place'],
       'product': ['product', 'item', 'goods'],
@@ -443,7 +447,6 @@ Answer the question now:`;
       'order': ['order', 'purchase', 'transaction']
     };
     
-    // Find the best matching column
     for (const [keyword, variations] of Object.entries(keywords)) {
       if (lowerQuestion.includes(keyword)) {
         for (const variation of variations) {
@@ -455,13 +458,11 @@ Answer the question now:`;
       }
     }
     
-    // If no specific match, return the first numeric column
     return columns[0] || null;
   }
   
   private getRowIdentifier(row: any, headers: string[]): string {
-    // Try to find a good identifier for the row
-    const identifierColumns = ['name', 'title', 'product', 'item', 'category', 'region', 'id'];
+    const identifierColumns = ['name', 'pokemon', 'pokemon_name', 'title', 'product', 'item', 'category', 'region', 'id'];
     
     for (const idCol of identifierColumns) {
       const matchingHeader = headers.find(h => h.toLowerCase().includes(idCol));
@@ -470,12 +471,11 @@ Answer the question now:`;
       }
     }
     
-    // If no identifier found, use the first non-numeric column
     const firstTextColumn = headers.find(h => 
       isNaN(parseFloat(row[h])) || !isFinite(row[h])
     );
     
-    return firstTextColumn ? row[firstTextColumn] : 'Item';
+    return firstTextColumn ? row[firstTextColumn] : `Row ${Math.random().toString(36).substr(2, 5)}`;
   }
   private prepareDataContext(data: ExcelData): string {
     let context = '';
@@ -496,12 +496,15 @@ Answer the question now:`;
   }
 
   private parseResponse(response: string): { text: string; chart?: ChartData } {
-    const chartSpecMatch = response.match(/CHART_SPEC:\s*({[\s\S]*?})/);
-    
-    if (chartSpecMatch) {
+    const chartSpecIdentifier = 'CHART_SPEC:';
+    const chartSpecIndex = response.indexOf(chartSpecIdentifier);
+
+    if (chartSpecIndex !== -1) {
+      const textResponse = response.substring(0, chartSpecIndex).trim();
+      const chartSpecString = response.substring(chartSpecIndex + chartSpecIdentifier.length).trim();
+      
       try {
-        const chartSpec = JSON.parse(chartSpecMatch[1]);
-        const textResponse = response.replace(/CHART_SPEC:[\s\S]*/, '').trim();
+        const chartSpec = JSON.parse(chartSpecString);
         
         const chartData: ChartData = {
           type: chartSpec.type,
@@ -520,6 +523,7 @@ Answer the question now:`;
         return { text: textResponse, chart: chartData };
       } catch (error) {
         console.error('Failed to parse chart specification:', error);
+        return { text: response };
       }
     }
     

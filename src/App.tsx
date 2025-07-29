@@ -43,9 +43,9 @@ function App() {
         <div className="max-w-full px-6 py-4">
           <div className="flex items-center justify-between">
             <div className="flex items-center space-x-3">
-              <div className="flex items-center justify-center w-10 h-10 bg-blue-600 rounded-lg">
+              {/* <div className="flex items-center justify-center w-10 h-10 bg-blue-600 rounded-lg">
                 <MessageSquare className="w-6 h-6 text-white" />
-              </div>
+              </div> */}
               <div>
                 <h1 className="text-2xl font-bold text-gray-900">Excel Chatbot Assistant</h1>
                 <p className="text-sm text-gray-500">AI-powered Excel data analysis and visualization</p>

@@ -11,6 +11,7 @@ export interface ChatMessage {
   timestamp: string;
   chart?: ChartData;
   showChart?: boolean;
+  currentChartType?: 'bar' | 'line' | 'pie' | 'area';
 }
 
 export interface ChartData {

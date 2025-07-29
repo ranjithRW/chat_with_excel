@@ -3,7 +3,7 @@ import { Send, Bot, User, Loader, BarChart3, EyeOff } from 'lucide-react';
 import { ChatMessage, ExcelData } from '../types';
 import { OpenAIService } from '../utils/openai';
 import { saveChatHistory } from '../utils/localStorage';
-import { ChartRenderer } from './ChartRenderer';
+import { ChartRenderer } from './ChartRenderer'; // Import ChartRenderer
 
 interface ChatInterfaceProps {
   data: ExcelData;
@@ -21,16 +21,6 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({
   const [apiError, setApiError] = useState<string | null>(null);
   const messagesEndRef = useRef<HTMLDivElement>(null);
   const openAIService = useRef<OpenAIService | null>(null);
-
-  const toggleChart = (messageId: string) => {
-    const updatedMessages = messages.map(msg => 
-      msg.id === messageId 
-        ? { ...msg, showChart: !msg.showChart }
-        : msg
-    );
-    onMessagesChange(updatedMessages);
-    saveChatHistory(updatedMessages);
-  };
 
   useEffect(() => {
     try {
@@ -69,7 +59,8 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({
         content: response.text,
         timestamp: new Date().toISOString(),
         chart: response.chart,
-        showChart: false
+        showChart: !!response.chart, // Show chart by default if available
+        currentChartType: response.chart?.type, // Set initial chart type
       };
 
       const finalMessages = [...updatedMessages, assistantMessage];
@@ -82,7 +73,6 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({
         content: `Sorry, I encountered an error: ${error instanceof Error ? error.message : 'Unknown error'}`,
         timestamp: new Date().toISOString()
       };
-
       const finalMessages = [...updatedMessages, errorMessage];
       onMessagesChange(finalMessages);
     } finally {
@@ -90,34 +80,50 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({
     }
   };
 
+  // --- NEW: Handlers for chart interaction ---
+  const handleToggleChart = (messageId: string) => {
+    const updatedMessages = messages.map((msg) =>
+      msg.id === messageId ? { ...msg, showChart: !msg.showChart } : msg
+    );
+    onMessagesChange(updatedMessages);
+  };
+
+  const handleChartTypeChange = (
+    messageId: string,
+    newType: 'bar' | 'line' | 'pie' | 'area'
+  ) => {
+    const updatedMessages = messages.map((msg) =>
+      msg.id === messageId ? { ...msg, currentChartType: newType } : msg
+    );
+    onMessagesChange(updatedMessages);
+  };
+
   return (
     <div className="flex flex-col h-full">
       <div className="flex-1 overflow-y-auto p-4 space-y-4">
         {messages.length === 0 ? (
+          // Welcome message (no changes)
           <div className="text-center py-12">
             <Bot className="w-16 h-16 text-gray-400 mx-auto mb-4" />
-            <h3 className="text-lg font-medium text-gray-900 mb-2">
-              Welcome to Excel Chatbot Assistant
-            </h3>
-            <p className="text-gray-500 max-w-md mx-auto">
-              Ask me questions about your Excel data! I can help you analyze data, 
-              create summaries, and generate charts.
-            </p>
+            <h3 className="text-lg font-medium text-gray-900 mb-2">Welcome to Excel Chatbot Assistant</h3>
+            <p className="text-gray-500 max-w-md mx-auto">Ask me questions about your Excel data! I can help you analyze data, create summaries, and generate charts.</p>
             <div className="mt-6 text-sm text-gray-400">
               <p className="mb-2">Try asking:</p>
               <ul className="space-y-1">
                 <li>"Show me a summary of the data"</li>
-                <li>"Create a bar chart of sales by region"</li>
-                <li>"What are the top 5 products by revenue?"</li>
+                <li>"Top 5 Pokemon by Attack"</li>
+                <li>"Show me the strongest Pokemon"</li>
+                <li>"Create a chart of Pokemon types"</li>
                 <li>"Show trends over time"</li>
               </ul>
             </div>
           </div>
         ) : (
+          // --- MODIFIED: Message rendering loop ---
           messages.map((message) => (
             <div
               key={message.id}
-              className={`flex ${message.type === 'user' ? 'justify-end' : 'justify-start'}`}
+              className={`flex flex-col ${message.type === 'user' ? 'items-end' : 'items-start'}`}
             >
               <div className={`flex max-w-3xl ${message.type === 'user' ? 'flex-row-reverse' : 'flex-row'}`}>
                 <div className={`flex-shrink-0 w-8 h-8 rounded-full flex items-center justify-center ${
@@ -135,17 +141,12 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({
                 }`}>
                   <p className="whitespace-pre-wrap">{message.content}</p>
                   
-                  {message.chart && message.showChart && (
-                    <div className="mt-4">
-                      <ChartRenderer chartData={message.chart} />
-                    </div>
-                  )}
-                  
-                  {message.chart && message.type === 'assistant' && (
-                    <div className="mt-3 pt-3 border-t border-gray-200">
+                  {/* --- NEW: Chart Toggle Button --- */}
+                  {message.type === 'assistant' && message.chart && (
+                    <div className="mt-4 border-t border-gray-200 pt-3">
                       <button
-                        onClick={() => toggleChart(message.id)}
-                        className="flex items-center space-x-2 px-3 py-1.5 text-sm bg-blue-50 hover:bg-blue-100 text-blue-700 rounded-lg transition-colors"
+                        onClick={() => handleToggleChart(message.id)}
+                        className="flex items-center space-x-2 px-3 py-1.5 rounded-lg text-sm font-medium transition-all bg-white text-gray-700 border border-gray-200 hover:bg-gray-50"
                       >
                         {message.showChart ? (
                           <>
@@ -161,18 +162,26 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({
                       </button>
                     </div>
                   )}
-                  
-                  {/* <p className="text-xs opacity-70 mt-2">
-                    {new Date(message.timestamp).toLocaleTimeString()}
-                  </p> */}
                 </div>
               </div>
+
+              {/* --- NEW: Chart Renderer --- */}
+              {message.showChart && message.chart && (
+                <div className="mt-2 w-full max-w-3xl">
+                  <ChartRenderer
+                    chartData={message.chart}
+                    currentChartType={message.currentChartType}
+                    onChartTypeChange={(newType) => handleChartTypeChange(message.id, newType)}
+                  />
+                </div>
+              )}
             </div>
           ))
         )}
         
         {isLoading && (
-          <div className="flex justify-start">
+           // Loader (no changes)
+           <div className="flex justify-start">
             <div className="flex max-w-3xl">
               <div className="flex-shrink-0 w-8 h-8 rounded-full bg-gray-200 text-gray-600 mr-3 flex items-center justify-center">
                 <Bot className="w-4 h-4" />
@@ -191,6 +200,7 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({
       </div>
 
       <div className="border-t bg-white p-4">
+        {/* Input form (no changes) */}
         <div className="flex space-x-3">
           <input
             type="text"
@@ -209,11 +219,8 @@ export const ChatInterface: React.FC<ChatInterfaceProps> = ({
             <Send className="w-5 h-5" />
           </button>
         </div>
-        
         {apiError && (
-          <p className="text-sm text-red-600 mt-2">
-            {apiError}
-          </p>
+          <p className="text-sm text-red-600 mt-2">{apiError}</p>
         )}
       </div>
     </div>

@@ -16,10 +16,13 @@ import {
   Legend,
   ResponsiveContainer
 } from 'recharts';
+import { BarChart3, PieChart as PieChartIcon } from 'lucide-react';
 import { ChartData } from '../types';
 
 interface ChartRendererProps {
   chartData: ChartData;
+  currentChartType?: 'bar' | 'line' | 'pie' | 'area';
+  onChartTypeChange?: (type: 'bar' | 'line' | 'pie' | 'area') => void;
 }
 
 const COLORS = [
@@ -27,21 +30,59 @@ const COLORS = [
   '#06B6D4', '#84CC16', '#F97316', '#EC4899', '#6366F1'
 ];
 
-export const ChartRenderer: React.FC<ChartRendererProps> = ({ chartData }) => {
-  const { type, data, config } = chartData;
+// --- MODIFIED: Function signature now accepts all props ---
+export const ChartRenderer: React.FC<ChartRendererProps> = ({ 
+  chartData,
+  currentChartType,
+  onChartTypeChange 
+}) => {
+  const { data, config } = chartData;
+  const activeChartType = currentChartType || chartData.type;
+
+  // Custom label formatter for better readability
+  const formatLabel = (value: any) => {
+    if (typeof value === 'string' && value.length > 15) {
+      return value.substring(0, 12) + '...';
+    }
+    return value;
+  };
+
+  // Custom tooltip formatter
+  const CustomTooltip = ({ active, payload, label }: any) => {
+    if (active && payload && payload.length) {
+      return (
+        <div className="bg-white p-3 border border-gray-200 rounded-lg shadow-lg">
+          <p className="font-medium text-gray-900">{label}</p>
+          {payload.map((entry: any, index: number) => (
+            <p key={index} style={{ color: entry.color }}>
+              {`${entry.name}: ${entry.value.toLocaleString()}`}
+            </p>
+          ))}
+        </div>
+      );
+    }
+    return null;
+  };
 
   const renderChart = () => {
-    switch (type) {
+    switch (activeChartType) {
       case 'bar':
         return (
           <ResponsiveContainer width="100%" height={400}>
             <BarChart data={data} margin={{ top: 20, right: 30, left: 20, bottom: 5 }}>
               <CartesianGrid strokeDasharray="3 3" />
-              <XAxis dataKey={config.xKey} />
+              <XAxis 
+                dataKey={config.xKey} 
+                angle={-45}
+                textAnchor="end"
+                height={80}
+                interval={0}
+                tickFormatter={formatLabel}
+              />
               <YAxis />
-              <Tooltip />
+              <Tooltip content={<CustomTooltip />} />
               <Legend />
-              <Bar dataKey={config.yKey} fill="#3B82F6" />
+              <Bar dataKey={config.yKey} fill="#3B82F6" radius={[4, 4, 0, 0]} />
             </BarChart>
           </ResponsiveContainer>
         );
@@ -51,9 +92,9 @@ export const ChartRenderer: React.FC<ChartRendererProps> = ({ chartData }) => {
           <ResponsiveContainer width="100%" height={400}>
             <LineChart data={data} margin={{ top: 20, right: 30, left: 20, bottom: 5 }}>
               <CartesianGrid strokeDasharray="3 3" />
-              <XAxis dataKey={config.xKey} />
+              <XAxis dataKey={config.xKey} tickFormatter={formatLabel} />
               <YAxis />
-              <Tooltip />
+              <Tooltip content={<CustomTooltip />} />
               <Legend />
               <Line 
                 type="monotone" 
@@ -67,25 +108,31 @@ export const ChartRenderer: React.FC<ChartRendererProps> = ({ chartData }) => {
         );
 
       case 'pie':
+        // Convert bar chart data to pie chart format if needed
+        const pieData = data.map(item => ({
+          name: item.name || item[config.xKey || 'name'],
+          value: item.value || item[config.yKey || 'value']
+        }));
+        
         return (
           <ResponsiveContainer width="100%" height={400}>
             <PieChart>
               <Pie
-                data={data}
+                data={pieData}
                 cx="50%"
                 cy="50%"
                 labelLine={false}
-                label={({ name, percent }) => `${name} ${(percent * 100).toFixed(0)}%`}
+                label={({ name, percent }) => `${formatLabel(name)} ${(percent * 100).toFixed(0)}%`}
                 outerRadius={120}
                 fill="#8884d8"
-                dataKey={config.dataKey}
-                nameKey={config.nameKey}
+                dataKey="value"
+                nameKey="name"
               >
-                {data.map((_, index) => (
+                {pieData.map((_, index) => (
                   <Cell key={`cell-${index}`} fill={COLORS[index % COLORS.length]} />
                 ))}
               </Pie>
-              <Tooltip />
+              <Tooltip content={<CustomTooltip />} />
             </PieChart>
           </ResponsiveContainer>
         );
@@ -95,9 +142,9 @@ export const ChartRenderer: React.FC<ChartRendererProps> = ({ chartData }) => {
           <ResponsiveContainer width="100%" height={400}>
             <AreaChart data={data} margin={{ top: 20, right: 30, left: 20, bottom: 5 }}>
               <CartesianGrid strokeDasharray="3 3" />
-              <XAxis dataKey={config.xKey} />
+              <XAxis dataKey={config.xKey} tickFormatter={formatLabel} />
               <YAxis />
-              <Tooltip />
+              <Tooltip content={<CustomTooltip />} />
               <Legend />
               <Area 
                 type="monotone" 
@@ -120,7 +167,39 @@ export const ChartRenderer: React.FC<ChartRendererProps> = ({ chartData }) => {
       <h3 className="text-lg font-semibold text-gray-900 mb-4 text-center">
         {config.title}
       </h3>
+      
+      {/* Chart Type Toggle Buttons */}
+      {onChartTypeChange && (chartData.type === 'bar' || activeChartType === 'bar' || activeChartType === 'pie') && (
+        <div className="flex justify-center mb-4 space-x-2">
+          <button
+            onClick={() => onChartTypeChange('bar')}
+            className={`flex items-center space-x-2 px-3 py-2 rounded-lg text-sm font-medium transition-all ${
+              activeChartType === 'bar'
+                ? 'bg-blue-600 text-white shadow-md'
+                : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+            }`}
+          >
+            <BarChart3 className="w-4 h-4" />
+            <span>Bar Chart</span>
+          </button>
+          <button
+            onClick={() => onChartTypeChange('pie')}
+            className={`flex items-center space-x-2 px-3 py-2 rounded-lg text-sm font-medium transition-all ${
+              activeChartType === 'pie'
+                ? 'bg-blue-600 text-white shadow-md'
+                : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
+            }`}
+          >
+            <PieChartIcon className="w-4 h-4" />
+            <span>Pie Chart</span>
+          </button>
+        </div>
+      )}
+      
       {renderChart()}
+      <div className="mt-2 text-xs text-gray-500 text-center">
+        {data.length} data points displayed
+      </div>
     </div>
   );
 };
