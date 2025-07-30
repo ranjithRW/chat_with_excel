@@ -182,17 +182,7 @@ export const ChartRenderer: React.FC<ChartRendererProps> = ({
             <BarChart3 className="w-4 h-4" />
             <span>Bar Chart</span>
           </button>
-          <button
-            onClick={() => onChartTypeChange('pie')}
-            className={`flex items-center space-x-2 px-3 py-2 rounded-lg text-sm font-medium transition-all ${
-              activeChartType === 'pie'
-                ? 'bg-blue-600 text-white shadow-md'
-                : 'bg-gray-100 text-gray-700 hover:bg-gray-200'
-            }`}
-          >
-            <PieChartIcon className="w-4 h-4" />
-            <span>Pie Chart</span>
-          </button>
+        
         </div>
       )}
       
