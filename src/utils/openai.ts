@@ -217,10 +217,32 @@ Answer the question now:`;
         }
       }
     }
-    return analysisFound ? result : null;
+    return analysisFound ? result : '';
   }
 
-  private processBottomNQuery(question: string, data: ExcelData, bottomN: number): string { /* ... */ return ''; }
+  private processBottomNQuery(question: string, data: ExcelData, bottomN: number): string {
+    // Implementation similar to processTopNQuery, but sorts ascending for bottom N
+    let result = `Bottom ${bottomN} Analysis:\n\n`;
+    let analysisFound = false;
+    for (const [sheetName, rows] of Object.entries(data.sheets)) {
+      if (rows.length === 0) continue;
+      const headers = Object.keys(rows[0]);
+      const numericColumns = headers.filter(header => rows.some(row => !isNaN(parseFloat(row[header]))));
+      if (numericColumns.length > 0) {
+        const relevantColumn = this.findRelevantColumn(question, numericColumns, rows);
+        if (relevantColumn) {
+          analysisFound = true;
+          const sorted = [...rows].filter(row => row[relevantColumn] != null && !isNaN(parseFloat(row[relevantColumn]))).sort((a, b) => parseFloat(a[relevantColumn]) - parseFloat(b[relevantColumn])).slice(0, bottomN);
+          const identifierColumn = this.getIdentifierColumnName(sorted, headers) || headers[0];
+          const chartPayload = { type: 'bar', title: `Bottom ${bottomN} by ${relevantColumn}`, data: sorted, xKey: identifierColumn, yKey: relevantColumn, };
+          result += `Sheet: ${sheetName}\nAnalysis: Finding bottom ${bottomN} rows by '${relevantColumn}'.\n`;
+          result += `Result:\n${JSON.stringify(sorted)}\n\n`;
+          result += `Data for Chart:\n${JSON.stringify(chartPayload)}\n`;
+        }
+      }
+    }
+    return analysisFound ? result : '';
+  }
   
   // --- HELPER FUNCTIONS ---
 
@@ -252,11 +274,13 @@ Answer the question now:`;
   
   private findRelevantColumn(question: string, columns: string[], rows: any[]): string | null {
     for (const col of columns) if (question.includes(col.toLowerCase())) return col;
-    const keywords = {'score': 'score', 'runs': 'runs', 'century': 'century', 'centuries': 'century', 'attack': 'Attack', 'defense': 'Defense', 'hp': 'HP', 'speed': 'Speed', 'sales': 'Sales', 'price': 'Price', 'revenue': 'Revenue'};
+    const keywords = {score: 'score', runs: 'runs', century: 'century', centuries: 'century', attack: 'Attack', defense: 'Defense', hp: 'HP', speed: 'Speed', sales: 'Sales', price: 'Price', revenue: 'Revenue'} as const;
     for(const keyword in keywords) {
-        if(question.includes(keyword)) {
-            const colName = columns.find(c => c.toLowerCase().includes(keywords[keyword].toLowerCase()));
-            if(colName) return colName;
+        if(Object.prototype.hasOwnProperty.call(keywords, keyword)) {
+            if(question.includes(keyword)) {
+                const colName = columns.find(c => c.toLowerCase().includes((keywords as Record<string, string>)[keyword].toLowerCase()));
+                if(colName) return colName;
+            }
         }
     }
     if (rows.length > 0) {

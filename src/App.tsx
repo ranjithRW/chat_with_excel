@@ -47,7 +47,7 @@ function App() {
                 <MessageSquare className="w-6 h-6 text-white" />
               </div> */}
               <div>
-                <h1 className="text-2xl font-bold text-violet-500">0bito <span className='text-pink-600'>Chatbot😎</span></h1>
+                <h1 className="text-2xl font-bold text-pink-500">0bito Chatbot😎</h1>
                 <p className="text-sm text-gray-500">AI-powered Excel data analysis and visualization</p>
               </div>
             </div>
